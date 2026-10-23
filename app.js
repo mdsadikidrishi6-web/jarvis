@@ -1,3 +1,7 @@
+// ====== SETTINGS ======
+// Tumhara Cloudflare Worker ka link (isme API key nahi hai, wo server par safe hai)
+const API_URL = "https://jarvis-api.mdsadikidrishi6.workers.dev";
+
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
 const input = document.getElementById("text");
@@ -9,12 +13,17 @@ const voiceOn = document.getElementById("voiceOn");
 const stopBtn = document.getElementById("stopSpeak");
 const micBtn = document.getElementById("mic");
 
+// Temporary conversation context: sirf is page ke khule rehne tak yaad rehta hai
+let history = [];
+let busy = false;
+
 function setState(state) {
   core.dataset.state = state;
   const labels = { idle: "Idle", listening: "Listening", thinking: "Thinking", speaking: "Speaking" };
   statusEl.textContent = labels[state] || "Idle";
 }
 
+// textContent use karte hain, taaki HTML inject na ho sake
 function addMessage(text, who) {
   const div = document.createElement("div");
   div.className = "msg " + who;
@@ -48,7 +57,7 @@ function speak(text) {
 
 function stopSpeaking() {
   if (synth) synth.cancel();
-  setState("idle");
+  if (!busy) setState("idle");
 }
 stopBtn.addEventListener("click", stopSpeaking);
 
@@ -109,46 +118,27 @@ micBtn.addEventListener("click", () => {
   if (listening) stopListening(); else startListening();
 });
 
-/* ---------- Commands + demo replies (Phase 4 mein real AI) ---------- */
-function getReply(text) {
-  const t = text.toLowerCase();
-  if (t.includes("hello") || t.includes("namaste") || t.includes("हैलो") || t.includes("नमस्ते"))
-    return "Hello! Main JARVIS hoon (demo mode).";
-  if (t.includes("time") || t.includes("samay") || t.includes("समय"))
-    return "Abhi samay hai: " + new Date().toLocaleTimeString();
-  return "Demo reply: aapne kaha \"" + text + "\". Real AI baad mein judega.";
-}
-
-function handleUserText(text) {
-  const t = text.toLowerCase();
-
-  if (t === "clear" || t.includes("clear conversation")) {
-    chat.innerHTML = "";
-    stopSpeaking();
-    return;
-  }
-  if (t.includes("stop speaking") || t === "stop") {
-    stopSpeaking();
-    return;
-  }
-
-  addMessage(text, "user");
+/* ---------- Real AI (Worker ke through) ---------- */
+async function askAI(text) {
+  busy = true;
   sendBtn.disabled = true;
   setState("thinking");
+  history.push({ role: "user", text });
 
-  setTimeout(() => {
-    const reply = getReply(text);
-    addMessage(reply, "ai");
-    sendBtn.disabled = false;
-    setState("idle");
-    speak(reply);
-  }, 700);
-}
+  // 25 second se zyada lage to request band kar dete hain
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
 
-form.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = "";
-  handleUserText(text);
-});
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value }),
+      signal: ctrl.signal
+    });
+
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* JSON nahi mila */ }
+
+    if (!res.ok || !data.reply) {
+      throw new
