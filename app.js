@@ -141,4 +141,68 @@ async function askAI(text) {
     try { data = await res.json(); } catch (e) { /* JSON nahi mila */ }
 
     if (!res.ok || !data.reply) {
-      throw new
+      throw new Error(data.error || ("Server error (" + res.status + ")"));
+    }
+
+    history.push({ role: "ai", text: data.reply });
+    addMessage(data.reply, "ai");
+    setState("idle");
+    speak(data.reply);
+  } catch (err) {
+    history.pop(); // fail hua message history se hata do
+    let msg = err.message;
+    if (err.name === "AbortError") {
+      msg = "Jawab aane mein bahut der lagi. Dobara try karo.";
+    } else if (err instanceof TypeError) {
+      msg = "Server tak pahunch nahi paye. Internet check karo, aur app ko GitHub Pages wale link se kholo.";
+    }
+    addMessage(msg, "sys");
+    setState("idle");
+  } finally {
+    clearTimeout(timer);
+    busy = false;
+    sendBtn.disabled = false;
+  }
+}
+
+/* ---------- Commands ---------- */
+function handleUserText(text) {
+  const t = text.toLowerCase();
+
+  if (t === "clear" || t.includes("clear conversation")) {
+    chat.innerHTML = "";
+    history = [];
+    stopSpeaking();
+    return;
+  }
+  if (t.includes("stop speaking") || t === "stop") {
+    stopSpeaking();
+    return;
+  }
+  if (busy) {
+    addMessage("Ruko, pichhla jawab abhi aa raha hai.", "sys");
+    return;
+  }
+
+  addMessage(text, "user");
+
+  // Samay: device ki apni ghadi se (AI ko zarurat nahi)
+  if (t.includes("what time") || t.includes("samay kya") || t.includes("समय क्या")) {
+    const reply = "Abhi samay hai: " + new Date().toLocaleTimeString();
+    addMessage(reply, "ai");
+    speak(reply);
+    return;
+  }
+
+  askAI(text);
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  handleUserText(text);
+});
+
+addMessage("Namaste! Main JARVIS hoon. Type karo ya 🎤 dabakar bolo.", "ai");
