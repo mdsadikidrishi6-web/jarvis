@@ -1,5 +1,4 @@
 // ====== SETTINGS ======
-// Tumhara Cloudflare Worker ka link (isme API key nahi hai, wo server par safe hai)
 const API_URL = "https://jarvis-api.mdsadikidrishi6.workers.dev";
 
 const chat = document.getElementById("chat");
@@ -45,9 +44,11 @@ function pickVoice(lang) {
 function speak(text) {
   if (!synth || !voiceOn.checked) return;
   synth.cancel();
+  // Devanagari (Hindi) text ho to Hindi awaaz, warna selected language
+  const lang = /[\u0900-\u097F]/.test(text) ? "hi-IN" : langSel.value;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = langSel.value;
-  const v = pickVoice(langSel.value);
+  u.lang = lang;
+  const v = pickVoice(lang);
   if (v) u.voice = v;
   u.onstart = () => setState("speaking");
   u.onend = () => setState("idle");
@@ -125,7 +126,6 @@ async function askAI(text) {
   setState("thinking");
   history.push({ role: "user", text });
 
-  // 25 second se zyada lage to request band kar dete hain
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 25000);
 
@@ -149,7 +149,7 @@ async function askAI(text) {
     setState("idle");
     speak(data.reply);
   } catch (err) {
-    history.pop(); // fail hua message history se hata do
+    history.pop();
     let msg = err.message;
     if (err.name === "AbortError") {
       msg = "Jawab aane mein bahut der lagi. Dobara try karo.";
@@ -165,7 +165,114 @@ async function askAI(text) {
   }
 }
 
-/* ---------- Commands ---------- */
+/* ---------- Voice commands (browser ke andar chalne wale) ---------- */
+const JOKES = [
+  "Teacher ne poocha: homework kahan hai? Student bola: Sir, cloud mein tha, network chala gaya.",
+  "Why do programmers prefer dark mode? Because light attracts bugs.",
+  "Doctor ne kaha roz 10 kilometre chalo. Ek hafte baad patient ne phone kiya: Doctor sahab, ab main aapse 70 kilometre door hoon."
+];
+
+// Sirf ye do sites khulne dete hain
+function safeUrl(u) {
+  try {
+    const x = new URL(u);
+    return x.protocol === "https:" &&
+      (x.hostname === "www.google.com" || x.hostname === "www.youtube.com");
+  } catch (e) { return false; }
+}
+
+function reply(text) {
+  addMessage(text, "ai");
+  speak(text);
+}
+
+// Link kholne se pehle poochta hai: Haan / Nahi
+function askConfirm(question, url) {
+  if (!safeUrl(url)) {
+    addMessage("Ye link allowed nahi hai.", "sys");
+    return;
+  }
+  const box = document.createElement("div");
+  box.className = "msg sys";
+  const p = document.createElement("div");
+  p.textContent = question;
+  p.style.marginBottom = "8px";
+  const yes = document.createElement("button");
+  yes.type = "button"; yes.className = "ghost"; yes.textContent = "Haan, kholo";
+  yes.style.marginRight = "8px";
+  const no = document.createElement("button");
+  no.type = "button"; no.className = "ghost"; no.textContent = "Nahi";
+
+  yes.addEventListener("click", () => {
+    yes.disabled = true; no.disabled = true;
+    const w = window.open(url, "_blank", "noopener");
+    if (!w) addMessage("Browser ne naya tab block kar diya. Is site ke liye popups allow karo.", "sys");
+  });
+  no.addEventListener("click", () => {
+    yes.disabled = true; no.disabled = true;
+    p.textContent = "Theek hai, cancel kar diya.";
+  });
+
+  box.append(p, yes, no);
+  chat.appendChild(box);
+  chat.scrollTop = chat.scrollHeight;
+  speak(question);
+}
+
+// True return kare to command handle ho gaya (AI ko nahi bhejna)
+function runCommand(raw) {
+  const t = raw.toLowerCase().trim().replace(/[.!?।]+$/, "");
+
+  // Greeting
+  if (/^(hello|hi|hey|namaste|नमस्ते|हैलो|हेलो)(\s+(jarvis|जार्विस|जारविस))?$/.test(t)) {
+    reply("Namaste! Main JARVIS hoon. Bataiye, kya madad karun?");
+    return true;
+  }
+
+  // Samay
+  if (t.includes("what time") || t.includes("what's the time") || t.includes("what is the time") ||
+      t.includes("samay kya") || t.includes("time kya") || t.includes("समय क्या")) {
+    reply("Abhi samay hai: " + new Date().toLocaleTimeString());
+    return true;
+  }
+
+  // Joke
+  if (t.includes("joke") || t.includes("चुटकुला")) {
+    reply(JOKES[Math.floor(Math.random() * JOKES.length)]);
+    return true;
+  }
+
+  // Open Google / YouTube
+  let name = null;
+  let m = t.match(/^open\s+(.+)$/) ||
+          t.match(/^(.+?)\s+(?:kholo|khol do|khol|open karo|खोलो|खोल दो|खोल)$/);
+  if (m) name = m[1].trim();
+  if (name) {
+    if (name === "google" || name === "गूगल") {
+      askConfirm("Google kholna hai? Naye tab mein khulega.", "https://www.google.com/");
+      return true;
+    }
+    if (name === "youtube" || name === "you tube" || name === "यूट्यूब") {
+      askConfirm("YouTube kholna hai? Naye tab mein khulega.", "https://www.youtube.com/");
+      return true;
+    }
+  }
+
+  // Search
+  m = t.match(/^(?:search for|search)\s+(.+)$/) ||
+      t.match(/^(.+?)\s+(?:search karo|search kar do|search kar|khojo|सर्च करो|सर्च कर|खोजो)$/);
+  if (m) {
+    const q = m[1].trim().slice(0, 200);
+    if (q) {
+      const url = "https://www.google.com/search?q=" + encodeURIComponent(q);
+      askConfirm("Google par \"" + q + "\" search karun? Naye tab mein khulega.", url);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function handleUserText(text) {
   const t = text.toLowerCase();
 
@@ -185,16 +292,8 @@ function handleUserText(text) {
   }
 
   addMessage(text, "user");
-
-  // Samay: device ki apni ghadi se (AI ko zarurat nahi)
-  if (t.includes("what time") || t.includes("samay kya") || t.includes("समय क्या")) {
-    const reply = "Abhi samay hai: " + new Date().toLocaleTimeString();
-    addMessage(reply, "ai");
-    speak(reply);
-    return;
-  }
-
-  askAI(text);
+  if (runCommand(text)) return;   // local command ho to yahin khatam
+  askAI(text);                    // warna AI se poocho
 }
 
 form.addEventListener("submit", (e) => {
