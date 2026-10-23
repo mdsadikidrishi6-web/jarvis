@@ -11,7 +11,10 @@
   <main class="app">
     <header class="top">
       <h1>JARVIS</h1>
-      <span id="status" class="status" aria-live="polite">Idle</span>
+      <div class="top-right">
+        <span id="status" class="status" aria-live="polite">Idle</span>
+        <button type="button" id="gear" class="ghost gear" aria-label="Settings kholo">⚙️</button>
+      </div>
     </header>
 
     <section class="core-wrap" aria-hidden="true">
@@ -43,6 +46,27 @@
       <button type="submit" id="send">Send</button>
     </form>
   </main>
+
+  <!-- Settings panel -->
+  <section id="settings" class="settings" hidden aria-label="Settings">
+    <h2>Settings</h2>
+
+    <label class="row">Awaaz ki speed: <b id="rateVal">1.0</b>
+      <input type="range" id="rate" min="0.6" max="1.5" step="0.1" value="1">
+    </label>
+
+    <label class="row check">
+      <input type="checkbox" id="saveHist">
+      <span>Chat history is phone mein yaad rakho</span>
+    </label>
+    <p class="note">Ye sirf is browser mein save hoti hai, server par nahi. Private baatein save mat karo.</p>
+
+    <div class="btns">
+      <button type="button" id="wipe" class="ghost danger">Saara saved data delete karo</button>
+      <button type="button" id="closeSettings">Band karo</button>
+    </div>
+  </section>
+
   <script src="app.js"></script>
 </body>
 </html>
