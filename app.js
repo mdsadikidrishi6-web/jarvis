@@ -242,25 +242,26 @@ function runCommand(raw) {
     return true;
   }
 
-  // Open Google / YouTube
-  let name = null;
-  let m = t.match(/^open\s+(.+)$/) ||
-          t.match(/^(.+?)\s+(?:kholo|khol do|khol|open karo|खोलो|खोल दो|खोल)$/);
-  if (m) name = m[1].trim();
-  if (name) {
-    if (name === "google" || name === "गूगल") {
-      askConfirm("Google kholna hai? Naye tab mein khulega.", "https://www.google.com/");
+    // Open Google / YouTube (Hindi/English, alag-alag spelling ke saath)
+  const c = t.replace(/\s+/g, "");   // spaces hata ke match karte hain
+  const wantsOpen = /(^|\s)(open|ओपन)(\s|$)|खोल|kholo|khol\b|चालू|chalu/.test(t);
+  const YT_NAMES = ["youtube", "utube", "यूट्यूब", "युट्यूब", "युटुब", "यूटूब", "यूटयूब"];
+  const G_NAMES = ["google", "गूगल", "गुगल"];
+
+  if (wantsOpen) {
+    if (YT_NAMES.some(n => c.includes(n))) {
+      askConfirm("YouTube kholna hai? Naye tab mein khulega.", "https://www.youtube.com/");
       return true;
     }
-    if (name === "youtube" || name === "you tube" || name === "यूट्यूब") {
-      askConfirm("YouTube kholna hai? Naye tab mein khulega.", "https://www.youtube.com/");
+    if (G_NAMES.some(n => c.includes(n))) {
+      askConfirm("Google kholna hai? Naye tab mein khulega.", "https://www.google.com/");
       return true;
     }
   }
 
   // Search
-  m = t.match(/^(?:search for|search)\s+(.+)$/) ||
-      t.match(/^(.+?)\s+(?:search karo|search kar do|search kar|khojo|सर्च करो|सर्च कर|खोजो)$/);
+  const m = t.match(/^(?:search for|search|सर्च फॉर|सर्च फोर|सर्च)\s+(.+)$/) ||
+            t.match(/^(.+?)\s+(?:search karo|search kar do|search kar|khojo|सर्च करो|सर्च कर दो|सर्च कर|खोजो|खोज)$/);
   if (m) {
     const q = m[1].trim().slice(0, 200);
     if (q) {
@@ -269,9 +270,6 @@ function runCommand(raw) {
       return true;
     }
   }
-
-  return false;
-}
 
 function handleUserText(text) {
   const t = text.toLowerCase();
