@@ -1,5 +1,7 @@
 // ====== SETTINGS ======
 const API_URL = "https://jarvis-api.mdsadikidrishi6.workers.dev";
+const PREFS_KEY = "jarvis_prefs_v1";
+const HIST_KEY = "jarvis_history_v1";
 
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
@@ -11,10 +13,51 @@ const langSel = document.getElementById("lang");
 const voiceOn = document.getElementById("voiceOn");
 const stopBtn = document.getElementById("stopSpeak");
 const micBtn = document.getElementById("mic");
+const gear = document.getElementById("gear");
+const settingsEl = document.getElementById("settings");
+const rateInput = document.getElementById("rate");
+const rateVal = document.getElementById("rateVal");
+const saveHistBox = document.getElementById("saveHist");
+const wipeBtn = document.getElementById("wipe");
+const closeBtn = document.getElementById("closeSettings");
 
-// Temporary conversation context: sirf is page ke khule rehne tak yaad rehta hai
+// Temporary context: page khula hai tab tak. History save ON ho to storage mein bhi.
 let history = [];
 let busy = false;
+let prefs = { rate: 1, save: false };
+
+/* ---------- Storage (har jagah try/catch, kyunki storage fail ho sakta hai) ---------- */
+function loadPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY));
+    if (p && typeof p === "object") {
+      prefs.rate = Math.min(1.5, Math.max(0.6, Number(p.rate) || 1));
+      prefs.save = p.save === true;
+    }
+  } catch (e) { /* kuch save nahi tha */ }
+}
+function savePrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+}
+function saveHistory() {
+  if (!prefs.save) return;               // consent nahi to kuch save nahi hota
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(history.slice(-40))); } catch (e) {}
+}
+function loadHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(HIST_KEY));
+    if (Array.isArray(h)) {
+      return h
+        .filter(m => m && (m.role === "user" || m.role === "ai") && typeof m.text === "string")
+        .slice(-40)
+        .map(m => ({ role: m.role, text: m.text.slice(0, 1000) }));
+    }
+  } catch (e) {}
+  return [];
+}
+function removeHistory() {
+  try { localStorage.removeItem(HIST_KEY); } catch (e) {}
+}
 
 function setState(state) {
   core.dataset.state = state;
@@ -44,10 +87,10 @@ function pickVoice(lang) {
 function speak(text) {
   if (!synth || !voiceOn.checked) return;
   synth.cancel();
-  // Devanagari (Hindi) text ho to Hindi awaaz, warna selected language
   const lang = /[\u0900-\u097F]/.test(text) ? "hi-IN" : langSel.value;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = lang;
+  u.rate = prefs.rate;
   const v = pickVoice(lang);
   if (v) u.voice = v;
   u.onstart = () => setState("speaking");
@@ -145,6 +188,7 @@ async function askAI(text) {
     }
 
     history.push({ role: "ai", text: data.reply });
+    saveHistory();
     addMessage(data.reply, "ai");
     setState("idle");
     speak(data.reply);
@@ -242,8 +286,8 @@ function runCommand(raw) {
     return true;
   }
 
-    // Open Google / YouTube (Hindi/English, alag-alag spelling ke saath)
-  const c = t.replace(/\s+/g, "");   // spaces hata ke match karte hain
+  // Open Google / YouTube (Hindi/English, alag-alag spelling ke saath)
+  const c = t.replace(/\s+/g, "");
   const wantsOpen = /(^|\s)(open|ओपन)(\s|$)|खोल|kholo|khol\b|चालू|chalu/.test(t);
   const YT_NAMES = ["youtube", "utube", "यूट्यूब", "युट्यूब", "युटुब", "यूटूब", "यूटयूब"];
   const G_NAMES = ["google", "गूगल", "गुगल"];
@@ -271,12 +315,16 @@ function runCommand(raw) {
     }
   }
 
+  return false;
+}
+
 function handleUserText(text) {
   const t = text.toLowerCase();
 
   if (t === "clear" || t.includes("clear conversation")) {
     chat.innerHTML = "";
     history = [];
+    removeHistory();
     stopSpeaking();
     return;
   }
@@ -290,8 +338,8 @@ function handleUserText(text) {
   }
 
   addMessage(text, "user");
-  if (runCommand(text)) return;   // local command ho to yahin khatam
-  askAI(text);                    // warna AI se poocho
+  if (runCommand(text)) return;
+  askAI(text);
 }
 
 form.addEventListener("submit", (e) => {
@@ -302,4 +350,46 @@ form.addEventListener("submit", (e) => {
   handleUserText(text);
 });
 
-addMessage("Namaste! Main JARVIS hoon. Type karo ya 🎤 dabakar bolo.", "ai");
+/* ---------- Settings panel ---------- */
+function openSettings() {
+  rateInput.value = prefs.rate;
+  rateVal.textContent = Number(prefs.rate).toFixed(1);
+  saveHistBox.checked = prefs.save;
+  settingsEl.hidden = false;
+}
+gear.addEventListener("click", openSettings);
+closeBtn.addEventListener("click", () => { settingsEl.hidden = true; });
+
+rateInput.addEventListener("input", () => {
+  prefs.rate = Math.min(1.5, Math.max(0.6, Number(rateInput.value) || 1));
+  rateVal.textContent = prefs.rate.toFixed(1);
+  savePrefs();
+});
+
+saveHistBox.addEventListener("change", () => {
+  prefs.save = saveHistBox.checked;
+  savePrefs();
+  if (prefs.save) saveHistory(); else removeHistory();   // OFF karte hi saved history hat jati hai
+});
+
+wipeBtn.addEventListener("click", () => {
+  if (!confirm("Saved history aur settings delete kar dun? Ye wapas nahi aayega.")) return;
+  try { localStorage.removeItem(PREFS_KEY); localStorage.removeItem(HIST_KEY); } catch (e) {}
+  prefs = { rate: 1, save: false };
+  history = [];
+  chat.innerHTML = "";
+  openSettings();
+  addMessage("Saara saved data delete ho gaya.", "sys");
+});
+
+/* ---------- Start ---------- */
+loadPrefs();
+if (prefs.save) {
+  history = loadHistory();
+}
+if (history.length) {
+  history.forEach(m => addMessage(m.text, m.role === "user" ? "user" : "ai"));
+  addMessage("Pichhli baatein wapas aa gayi hain. Naya shuru karne ke liye \"clear\" likho.", "sys");
+} else {
+  addMessage("Namaste! Main JARVIS hoon. Type karo ya 🎤 dabakar bolo.", "ai");
+}
