@@ -73,3 +73,22 @@ button.ghost { background: transparent; color: #00e5ff; border: 1px solid #00e5f
 button.mic { padding: 0 14px; font-size: 1.2rem; }
 button.mic.on { background: #00e676; box-shadow: 0 0 14px #00e676; }
 .msg.sys { align-self: center; background: #3a2a00; border: 1px solid #ffab40; font-size: .85rem; }
+.top-right { display: flex; align-items: center; gap: 8px; }
+button.gear { padding: 4px 10px; font-size: 1rem; }
+
+.settings {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+  max-width: 576px; margin: 0 auto; z-index: 10;
+  background: #07131f; border: 1px solid #00e5ff88; border-radius: 16px;
+  padding: 16px; box-shadow: 0 0 30px #00e5ff44;
+}
+.settings[hidden] { display: none; }
+.settings h2 { color: #00e5ff; font-size: 1.1rem; margin-bottom: 12px; letter-spacing: 2px; }
+.settings .row { display: block; margin-bottom: 14px; font-size: .95rem; }
+.settings .row.check { display: flex; gap: 10px; align-items: center; }
+.settings input[type="range"] { width: 100%; padding: 0; margin-top: 8px; }
+.settings input[type="checkbox"] { width: 20px; height: 20px; flex: none; padding: 0; }
+.settings .note { font-size: .8rem; color: #8fb8c7; margin: -6px 0 14px; }
+.settings .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings .btns button { padding: 10px 14px; }
+button.danger { color: #ff8a80; border-color: #ff8a8088; }
