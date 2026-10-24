@@ -10,7 +10,7 @@
 <body>
   <main class="app">
     <header class="top">
-      <h1>JARVIS</h1>
+      <h1 id= "title" >JARVIS</h1>
       <div class="top-right">
         <span id="status" class="status" aria-live="polite">Idle</span>
         <button type="button" id="gear" class="ghost gear" aria-label="Settings kholo">⚙️</button>
@@ -50,6 +50,18 @@
   <!-- Settings panel -->
   <section id="settings" class="settings" hidden aria-label="Settings">
     <h2>Settings</h2>
+        <label class="row">Assistant ka naam
+      <input type="text" id="nameIn" maxlength="20" autocomplete="off" placeholder="JARVIS">
+    </label>
+
+    <label class="row">Personality
+      <select id="persona">
+        <option value="friendly">Dost jaisa (friendly)</option>
+        <option value="teacher">Teacher (step by step)</option>
+        <option value="short">Chhota aur seedha</option>
+        <option value="funny">Mazaakiya</option>
+      </select>
+    </label>
 
     <label class="row">Awaaz ki speed: <b id="rateVal">1.0</b>
       <input type="range" id="rate" min="0.6" max="1.5" step="0.1" value="1">
