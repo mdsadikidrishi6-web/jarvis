@@ -20,11 +20,27 @@ const rateVal = document.getElementById("rateVal");
 const saveHistBox = document.getElementById("saveHist");
 const wipeBtn = document.getElementById("wipe");
 const closeBtn = document.getElementById("closeSettings");
+const titleEl = document.getElementById("title");
+const nameIn = document.getElementById("nameIn");
+const personaSel = document.getElementById("persona");
 
 // Temporary context: page khula hai tab tak. History save ON ho to storage mein bhi.
 let history = [];
 let busy = false;
-let prefs = { rate: 1, save: false };
+const PERSONAS = ["friendly", "teacher", "short", "funny"];
+let prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly" };
+
+// Naam: sirf akshar, number aur space, max 20
+function cleanName(s) {
+  const n = String(s || "").replace(/[^\p{L}\p{N} ]/gu, "").trim().slice(0, 20);
+  return n || "JARVIS";
+}
+
+// Header aur tab ka title naam ke hisaab se badalta hai
+function applyName() {
+  if (titleEl) titleEl.textContent = prefs.name;
+  document.title = prefs.name;
+}
 
 /* ---------- Storage (har jagah try/catch, kyunki storage fail ho sakta hai) ---------- */
 function loadPrefs() {
@@ -33,6 +49,8 @@ function loadPrefs() {
     if (p && typeof p === "object") {
       prefs.rate = Math.min(1.5, Math.max(0.6, Number(p.rate) || 1));
       prefs.save = p.save === true;
+      prefs.name = cleanName(p.name);
+      prefs.persona = PERSONAS.includes(p.persona) ? p.persona : "friendly";
     }
   } catch (e) { /* kuch save nahi tha */ }
 }
@@ -176,7 +194,7 @@ async function askAI(text) {
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value }),
+      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value, name: prefs.name, persona: prefs.persona }),
       signal: ctrl.signal
     });
 
@@ -268,9 +286,14 @@ function runCommand(raw) {
   const t = raw.toLowerCase().trim().replace(/[.!?।]+$/, "");
 
   // Greeting
-  if (/^(hello|hi|hey|namaste|नमस्ते|हैलो|हेलो)(\s+(jarvis|जार्विस|जारविस))?$/.test(t)) {
-    reply("Namaste! Main JARVIS hoon. Bataiye, kya madad karun?");
-    return true;
+  const g = t.match(/^(hello|hi|hey|namaste|नमस्ते|हैलो|हेलो)(?:\s+(.+))?$/);
+  if (g) {
+    const rest = (g[2] || "").trim();
+    const nm = prefs.name.toLowerCase();
+    if (!rest || rest === nm || rest === "jarvis" || rest === "जार्विस" || rest === "जारविस") {
+      reply("Namaste! Main " + prefs.name + " hoon. Bataiye, kya madad karun?");
+      return true;
+    }
   }
 
   // Samay
@@ -355,6 +378,8 @@ function openSettings() {
   rateInput.value = prefs.rate;
   rateVal.textContent = Number(prefs.rate).toFixed(1);
   saveHistBox.checked = prefs.save;
+  if (nameIn) nameIn.value = prefs.name;
+  if (personaSel) personaSel.value = prefs.persona;
   settingsEl.hidden = false;
 }
 gear.addEventListener("click", openSettings);
@@ -372,10 +397,23 @@ saveHistBox.addEventListener("change", () => {
   if (prefs.save) saveHistory(); else removeHistory();   // OFF karte hi saved history hat jati hai
 });
 
+if (nameIn) nameIn.addEventListener("change", () => {
+  prefs.name = cleanName(nameIn.value);
+  nameIn.value = prefs.name;
+  savePrefs();
+  applyName();
+});
+
+if (personaSel) personaSel.addEventListener("change", () => {
+  prefs.persona = PERSONAS.includes(personaSel.value) ? personaSel.value : "friendly";
+  savePrefs();
+});
+
 wipeBtn.addEventListener("click", () => {
   if (!confirm("Saved history aur settings delete kar dun? Ye wapas nahi aayega.")) return;
   try { localStorage.removeItem(PREFS_KEY); localStorage.removeItem(HIST_KEY); } catch (e) {}
-  prefs = { rate: 1, save: false };
+  prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly" };
+  applyName();
   history = [];
   chat.innerHTML = "";
   openSettings();
@@ -384,6 +422,7 @@ wipeBtn.addEventListener("click", () => {
 
 /* ---------- Start ---------- */
 loadPrefs();
+applyName();
 if (prefs.save) {
   history = loadHistory();
 }
@@ -391,5 +430,5 @@ if (history.length) {
   history.forEach(m => addMessage(m.text, m.role === "user" ? "user" : "ai"));
   addMessage("Pichhli baatein wapas aa gayi hain. Naya shuru karne ke liye \"clear\" likho.", "sys");
 } else {
-  addMessage("Namaste! Main JARVIS hoon. Type karo ya 🎤 dabakar bolo.", "ai");
+  addMessage("Namaste! Main " + prefs.name + " hoon. Type karo ya 🎤 dabakar bolo.", "ai");
 }
