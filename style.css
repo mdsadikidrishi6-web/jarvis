@@ -92,3 +92,5 @@ button.gear { padding: 4px 10px; font-size: 1rem; }
 .settings .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .settings .btns button { padding: 10px 14px; }
 button.danger { color: #ff8a80; border-color: #ff8a8088; }
+.settings input[type="text"] { width: 100%; margin-top: 6px; padding: 10px; }
+.settings select { width: 100%; margin-top: 6px; }
