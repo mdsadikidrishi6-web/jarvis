@@ -668,3 +668,10 @@ if (history.length) {
 } else {
   addMessage("Namaste! Main " + prefs.name + " hoon. Type karo ya 🎤 dabakar bolo.", "ai");
 }
+
+/* ---------- PWA: service worker register ---------- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").catch(() => { /* install na ho to bhi app chalta hai */ });
+  });
+}
