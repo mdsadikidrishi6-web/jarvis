@@ -34,11 +34,14 @@ const noteForm = document.getElementById("noteForm");
 const noteIn = document.getElementById("noteIn");
 const noteList = document.getElementById("noteList");
 const closeNotes = document.getElementById("closeNotes");
+const studyBtn = document.getElementById("studyBtn");
+const studyEl = document.getElementById("study");
+const closeStudy = document.getElementById("closeStudy");
 
 // Temporary context: page khula hai tab tak. History save ON ho to storage mein bhi.
 let history = [];
 let busy = false;
-const PERSONAS = ["friendly", "teacher", "short", "funny"];
+const PERSONAS = ["friendly", "teacher", "short", "funny", "neet"];
 let prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly" };
 
 // Naam: sirf akshar, number aur space, max 20
@@ -356,6 +359,7 @@ function addNote(text) {
 
 function openNotes() {
   if (settingsEl) settingsEl.hidden = true;
+  if (studyEl) studyEl.hidden = true;
   if (notesEl) { renderNotes(); notesEl.hidden = false; }
 }
 
@@ -369,6 +373,30 @@ if (noteForm) noteForm.addEventListener("submit", (e) => {
   e.preventDefault();
   if (addNote(noteIn.value)) noteIn.value = "";
 });
+
+/* ---------- NEET Study panel ---------- */
+function openStudy() {
+  if (settingsEl) settingsEl.hidden = true;
+  if (notesEl) notesEl.hidden = true;
+  if (studyEl) studyEl.hidden = false;
+}
+if (studyBtn) studyBtn.addEventListener("click", openStudy);
+if (closeStudy) closeStudy.addEventListener("click", () => { studyEl.hidden = true; });
+if (studyEl && studyEl.querySelectorAll) {
+  studyEl.querySelectorAll("[data-cmd]").forEach(b => {
+    b.addEventListener("click", () => {
+      const cmd = b.getAttribute("data-cmd");
+      studyEl.hidden = true;
+      handleUserText(cmd);
+    });
+  });
+}
+
+function setPersona(p) {
+  prefs.persona = PERSONAS.includes(p) ? p : "friendly";
+  savePrefs();
+  if (personaSel) personaSel.value = prefs.persona;
+}
 
 /* ---------- Voice commands (browser ke andar chalne wale) ---------- */
 const JOKES = [
@@ -452,9 +480,36 @@ function runCommand(raw) {
     return true;
   }
 
+  // NEET study commands: AI ko ek saaf instruction bhejte hain
+  const modeOn = t.match(/^(?:neet|study|नीट)\s+(?:mode|मोड)(?:\s+on)?$/);
+  if (modeOn) {
+    setPersona("neet");
+    reply("NEET mode on. Ab main padhai ke tutor ki tarah jawab dunga.");
+    return true;
+  }
+  if (/^(?:normal|friendly|नॉर्मल)\s+(?:mode|मोड)$/.test(t)) {
+    setPersona("friendly");
+    reply("Normal mode on.");
+    return true;
+  }
+  const qz = t.match(/^(?:neet\s+)?quiz(?:$|[\s:\-]+(?:(?:on|of|for|par|pe)\s+)?(.*)$)/) ||
+             t.match(/^(?:क्विज\u093C?)(?:$|\s+(.*)$)/);
+  if (qz) {
+    const topic = (qz[1] || "").trim().slice(0, 100);
+    const prompt = topic
+      ? "NEET 2027 level ka ek MCQ poochho. Topic: " + topic + ". Sirf sawal aur 4 options (A, B, C, D) likho. Sahi jawab abhi mat batao, mere jawab ka intezaar karo."
+      : "NEET 2027 level ka ek MCQ poochho (Physics, Chemistry ya Biology mein se koi bhi). Sirf sawal aur 4 options (A, B, C, D) likho. Sahi jawab abhi mat batao, mere jawab ka intezaar karo.";
+    askAI(prompt);
+    return true;
+  }
+  if (/^(?:neet\s+)?(?:revision plan|रिवीजन प्लान|रिविजन प्लान)(?:\s+.*)?$/.test(t)) {
+    askAI("Mera NEET 2027 ka revision plan banao. Pehle mujhse 2 chhote sawal poochho: kitne din ya mahine bache hain, aur kaun se subjects weak hain. Phir plan do.");
+    return true;
+  }
+
   // Notes / To-do panel kholna
-  if (/^(?:show|open|dikhao)\s+(?:my\s+)?(?:notes|todos?|to-do|to do|tasks?|list)$/i.test(t) ||
-      /^(?:notes|todos?|to-do|to do|tasks?|नोट्स|टू डू|टूडू)\s+(?:dikhao|dikha do|kholo|दिखाओ|खोलो)$/i.test(t)) {
+  if (/^(?:show|open|dikhao|शो|ओपन|दिखाओ)\s+(?:my\s+|मेरे\s+)?(?:notes?|todos?|to-do|to do|tasks?|list|नोट(?:्स)?|टू डू|टूडू|टास्क)$/i.test(t) ||
+      /^(?:मेरे\s+|my\s+)?(?:notes?|todos?|to-do|to do|tasks?|नोट(?:्स)?|टू डू|टूडू|टास्क)\s+(?:dikhao|dikha do|kholo|दिखाओ|दिखा दो|खोलो|देखो)$/i.test(t)) {
     openNotes();
     reply("Notes aur to-do panel khol diya.");
     return true;
@@ -462,7 +517,7 @@ function runCommand(raw) {
 
   // Note save karna (original spelling/case ke saath)
   const r = raw.trim().replace(/[.!?।]+$/, "");
-  const nm = r.match(/^(?:note karo|note kar do|note kar|add note|new note|नोट करो|नोट कर दो|नोट कर)(?:\s*[:\-]\s*|\s+)(.+)$/i) ||
+  const nm = r.match(/^(?:note karo|note kar do|note kar|add note|new note|नोट करो|नोट कर दो|नोट कर|नोट)(?:\s*[:\-]\s*|\s+)(.+)$/i) ||
              r.match(/^note\s*[:\-]\s*(.+)$/i) ||
              r.match(/^(.+?)\s+(?:note karo|note kar do|नोट करो|नोट कर लो)$/i);
   if (nm) {
@@ -474,7 +529,7 @@ function runCommand(raw) {
   }
 
   // To-do add karna
-  const tm = r.match(/^(?:add todo|add to-do|add to do|add task|new task|new todo|todo|to-do|टू डू जोड़ो|टूडू जोड़ो|टास्क जोड़ो)(?:\s*[:\-]\s*|\s+)(.+)$/i) ||
+  const tm = r.match(/^(?:add todo|add to-do|add to do|add task|new task|new todo|todo|to-do|टू डू जोड़ो|टूडू जोड़ो|टास्क जोड़ो|टू डू|टूडू|टास्क)(?:\s*[:\-]\s*|\s+)(.+)$/i) ||
              r.match(/^(.+?)\s+(?:todo mein add karo|task add karo|to do mein daalo|टू डू में जोड़ो)$/i);
   if (tm) {
     if (addTodo(tm[1])) {
@@ -556,6 +611,7 @@ function openSettings() {
   if (nameIn) nameIn.value = prefs.name;
   if (personaSel) personaSel.value = prefs.persona;
   if (notesEl) notesEl.hidden = true;
+  if (studyEl) studyEl.hidden = true;
   settingsEl.hidden = false;
 }
 gear.addEventListener("click", openSettings);

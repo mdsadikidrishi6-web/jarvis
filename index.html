@@ -14,6 +14,7 @@
       <h1 id="title">JARVIS</h1>
       <div class="top-right">
         <span id="status" class="status" aria-live="polite">Idle</span>
+        <button type="button" id="studyBtn" class="ghost gear" aria-label="NEET study kholo">🎓</button>
         <button type="button" id="notesBtn" class="ghost gear" aria-label="Notes aur To-do kholo">📝</button>
         <button type="button" id="gear" class="ghost gear" aria-label="Settings kholo">⚙️</button>
       </div>
@@ -63,6 +64,7 @@
         <option value="teacher">Teacher (step by step)</option>
         <option value="short">Chhota aur seedha</option>
         <option value="funny">Mazaakiya</option>
+        <option value="neet">NEET tutor (padhai)</option>
       </select>
     </label>
 
@@ -105,6 +107,24 @@
     <p class="note">Ye sirf is browser mein save hota hai, server par nahi. Private baatein mat likho.</p>
     <div class="btns">
       <button type="button" id="closeNotes">Band karo</button>
+    </div>
+  </section>
+
+  <!-- NEET study panel -->
+  <section id="study" class="settings study" hidden aria-label="NEET study">
+    <h2>NEET Study</h2>
+    <div class="grid">
+      <button type="button" data-cmd="quiz physics">Physics quiz</button>
+      <button type="button" data-cmd="quiz chemistry">Chemistry quiz</button>
+      <button type="button" data-cmd="quiz biology">Biology quiz</button>
+      <button type="button" data-cmd="revision plan">Revision plan</button>
+      <button type="button" data-cmd="neet mode on">NEET mode ON</button>
+      <button type="button" data-cmd="normal mode">Normal mode</button>
+    </div>
+    <p class="note">Doubt poochne ke liye seedha chat mein likho ya bolo, jaise "Newton ka teesra niyam samjhao". Quiz mein option (A, B, C ya D) likhke jawab do.</p>
+    <p class="note">AI galti kar sakta hai, khaaskar numericals aur facts mein. Zaroori cheezein NCERT se verify karo.</p>
+    <div class="btns">
+      <button type="button" id="closeStudy">Band karo</button>
     </div>
   </section>
 

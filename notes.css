@@ -16,3 +16,7 @@
 .items li.empty { color: #8fb8c7; font-size: .85rem; border: none; }
 .items input[type="checkbox"] { width: 20px; height: 20px; flex: none; padding: 0; }
 button.x { padding: 4px 10px; font-size: .9rem; flex: none; }
+
+/* NEET study panel */
+.study .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.study .grid button { padding: 12px 8px; }
