@@ -34,6 +34,11 @@ const noteForm = document.getElementById("noteForm");
 const noteIn = document.getElementById("noteIn");
 const noteList = document.getElementById("noteList");
 const closeNotes = document.getElementById("closeNotes");
+const voiceHiSel = document.getElementById("voiceHi");
+const voiceEnSel = document.getElementById("voiceEn");
+const testHiBtn = document.getElementById("testHi");
+const testEnBtn = document.getElementById("testEn");
+const voiceNote = document.getElementById("voiceNote");
 const studyBtn = document.getElementById("studyBtn");
 const studyEl = document.getElementById("study");
 const closeStudy = document.getElementById("closeStudy");
@@ -42,7 +47,7 @@ const closeStudy = document.getElementById("closeStudy");
 let history = [];
 let busy = false;
 const PERSONAS = ["friendly", "teacher", "short", "funny", "neet"];
-let prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly" };
+let prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly", voiceHi: "", voiceEn: "" };
 
 // Naam: sirf akshar, number aur space, max 20
 function cleanName(s) {
@@ -65,6 +70,8 @@ function loadPrefs() {
       prefs.save = p.save === true;
       prefs.name = cleanName(p.name);
       prefs.persona = PERSONAS.includes(p.persona) ? p.persona : "friendly";
+      prefs.voiceHi = typeof p.voiceHi === "string" ? p.voiceHi.slice(0, 200) : "";
+      prefs.voiceEn = typeof p.voiceEn === "string" ? p.voiceEn.slice(0, 200) : "";
     }
   } catch (e) { /* kuch save nahi tha */ }
 }
@@ -109,9 +116,17 @@ function addMessage(text, who) {
 /* ---------- Text-to-speech ---------- */
 const synth = window.speechSynthesis;
 
+function voiceKey(v) { return v.voiceURI || v.name; }
+
 function pickVoice(lang) {
   const voices = synth.getVoices();
   const base = lang.split("-")[0];
+  // Settings mein chuni hui awaaz (agar mil jaye)
+  const wanted = base === "hi" ? prefs.voiceHi : prefs.voiceEn;
+  if (wanted) {
+    const chosen = voices.find(v => voiceKey(v) === wanted);
+    if (chosen) return chosen;
+  }
   return voices.find(v => v.lang === lang) ||
          voices.find(v => v.lang.startsWith(base)) || null;
 }
@@ -240,6 +255,58 @@ async function askAI(text) {
     sendBtn.disabled = false;
   }
 }
+
+/* ---------- Awaaz chunna (phone ki apni awaazein, free aur unlimited) ---------- */
+function fillVoiceSelect(sel, base, saved) {
+  if (!sel) return 0;
+  sel.innerHTML = "";
+  const auto = document.createElement("option");
+  auto.value = ""; auto.textContent = "Auto (phone ki default)";
+  sel.appendChild(auto);
+  let count = 0;
+  if (synth) {
+    synth.getVoices()
+      .filter(v => v.lang && v.lang.replace("_", "-").toLowerCase().startsWith(base))
+      .forEach(v => {
+        const o = document.createElement("option");
+        o.value = voiceKey(v);
+        o.textContent = v.name + " (" + v.lang + ")";
+        sel.appendChild(o);
+        count++;
+      });
+  }
+  sel.value = saved;
+  if (sel.value !== saved) sel.value = "";    // saved awaaz ab phone mein nahi to Auto
+  return count;
+}
+
+function refreshVoiceLists() {
+  const hi = fillVoiceSelect(voiceHiSel, "hi", prefs.voiceHi);
+  fillVoiceSelect(voiceEnSel, "en", prefs.voiceEn);
+  if (voiceNote) {
+    voiceNote.textContent = hi === 0
+      ? "Is phone mein Hindi awaaz nahi mili. Phone Settings > Text-to-speech output mein Hindi voice data download karo."
+      : "Awaazein phone ke text-to-speech engine se aati hain. Zyada awaazein phone Settings mein download ho sakti hain.";
+  }
+}
+if (synth) synth.addEventListener("voiceschanged", refreshVoiceLists);
+
+// Test: Awaaz band ho tab bhi chalta hai
+function speakSample(text, lang) {
+  if (!synth) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  u.rate = prefs.rate;
+  const v = pickVoice(lang);
+  if (v) u.voice = v;
+  synth.speak(u);
+}
+
+if (voiceHiSel) voiceHiSel.addEventListener("change", () => { prefs.voiceHi = voiceHiSel.value; savePrefs(); });
+if (voiceEnSel) voiceEnSel.addEventListener("change", () => { prefs.voiceEn = voiceEnSel.value; savePrefs(); });
+if (testHiBtn) testHiBtn.addEventListener("click", () => speakSample("नमस्ते, मैं आपका असिस्टेंट हूँ।", "hi-IN"));
+if (testEnBtn) testEnBtn.addEventListener("click", () => speakSample("Hello, I am your assistant.", "en-IN"));
 
 /* ---------- Notes aur To-do (sirf is browser mein save) ---------- */
 let store = { todos: [], notes: [] };
@@ -776,6 +843,7 @@ function openSettings() {
   saveHistBox.checked = prefs.save;
   if (nameIn) nameIn.value = prefs.name;
   if (personaSel) personaSel.value = prefs.persona;
+  refreshVoiceLists();
   if (notesEl) notesEl.hidden = true;
   if (studyEl) studyEl.hidden = true;
   settingsEl.hidden = false;
@@ -812,7 +880,7 @@ wipeBtn.addEventListener("click", () => {
   try { localStorage.removeItem(PREFS_KEY); localStorage.removeItem(HIST_KEY); localStorage.removeItem(NOTES_KEY); } catch (e) {}
   store = { todos: [], notes: [] };
   renderNotes();
-  prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly" };
+  prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly", voiceHi: "", voiceEn: "" };
   applyName();
   history = [];
   chat.innerHTML = "";

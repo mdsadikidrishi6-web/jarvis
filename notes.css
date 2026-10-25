@@ -20,3 +20,7 @@ button.x { padding: 4px 10px; font-size: .9rem; flex: none; }
 /* NEET study panel */
 .study .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .study .grid button { padding: 12px 8px; }
+
+/* Lambe panel phone par scroll ho sakein */
+.settings { max-height: 80dvh; overflow-y: auto; }
+button.small { padding: 8px 12px; font-size: .85rem; margin: 0 0 12px; }
