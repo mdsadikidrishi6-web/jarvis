@@ -1,0 +1,18 @@
+/* Notes aur To-do panel (settings panel ka design reuse hota hai) */
+.notes { max-height: 75dvh; overflow-y: auto; }
+.notes h3 { color: #7fefff; font-size: .95rem; margin: 10px 0 6px; }
+
+.add-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.add-row input[type="text"] { flex: 1; width: auto; margin-top: 0; padding: 10px; min-width: 0; }
+.add-row button { padding: 10px 16px; }
+
+.items { list-style: none; margin: 0 0 6px; padding: 0; }
+.items li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 4px; border-bottom: 1px solid #00e5ff22;
+}
+.items li span { flex: 1; overflow-wrap: anywhere; line-height: 1.35; }
+.items li span.done { text-decoration: line-through; opacity: .55; }
+.items li.empty { color: #8fb8c7; font-size: .85rem; border: none; }
+.items input[type="checkbox"] { width: 20px; height: 20px; flex: none; padding: 0; }
+button.x { padding: 4px 10px; font-size: .9rem; flex: none; }

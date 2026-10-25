@@ -6,13 +6,15 @@
   <meta name="theme-color" content="#050b14">
   <title>JARVIS</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="notes.css">
 </head>
 <body>
   <main class="app">
     <header class="top">
-      <h1 id= "title" >JARVIS</h1>
+      <h1 id="title">JARVIS</h1>
       <div class="top-right">
         <span id="status" class="status" aria-live="polite">Idle</span>
+        <button type="button" id="notesBtn" class="ghost gear" aria-label="Notes aur To-do kholo">📝</button>
         <button type="button" id="gear" class="ghost gear" aria-label="Settings kholo">⚙️</button>
       </div>
     </header>
@@ -50,7 +52,8 @@
   <!-- Settings panel -->
   <section id="settings" class="settings" hidden aria-label="Settings">
     <h2>Settings</h2>
-        <label class="row">Assistant ka naam
+
+    <label class="row">Assistant ka naam
       <input type="text" id="nameIn" maxlength="20" autocomplete="off" placeholder="JARVIS">
     </label>
 
@@ -76,6 +79,32 @@
     <div class="btns">
       <button type="button" id="wipe" class="ghost danger">Saara saved data delete karo</button>
       <button type="button" id="closeSettings">Band karo</button>
+    </div>
+  </section>
+
+  <!-- Notes aur To-do panel -->
+  <section id="notes" class="settings notes" hidden aria-label="Notes aur To-do">
+    <h2>Notes &amp; To-do</h2>
+
+    <h3>To-do</h3>
+    <form id="todoForm" class="add-row">
+      <input id="todoIn" type="text" maxlength="200" autocomplete="off"
+             placeholder="Naya task..." aria-label="Naya task">
+      <button type="submit">Add</button>
+    </form>
+    <ul id="todoList" class="items"></ul>
+
+    <h3>Notes</h3>
+    <form id="noteForm" class="add-row">
+      <input id="noteIn" type="text" maxlength="500" autocomplete="off"
+             placeholder="Naya note..." aria-label="Naya note">
+      <button type="submit">Add</button>
+    </form>
+    <ul id="noteList" class="items"></ul>
+
+    <p class="note">Ye sirf is browser mein save hota hai, server par nahi. Private baatein mat likho.</p>
+    <div class="btns">
+      <button type="button" id="closeNotes">Band karo</button>
     </div>
   </section>
 

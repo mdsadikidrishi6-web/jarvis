@@ -2,6 +2,8 @@
 const API_URL = "https://jarvis-api.mdsadikidrishi6.workers.dev";
 const PREFS_KEY = "jarvis_prefs_v1";
 const HIST_KEY = "jarvis_history_v1";
+const NOTES_KEY = "jarvis_notes_v1";
+const MAX_ITEMS = 100;
 
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
@@ -23,6 +25,15 @@ const closeBtn = document.getElementById("closeSettings");
 const titleEl = document.getElementById("title");
 const nameIn = document.getElementById("nameIn");
 const personaSel = document.getElementById("persona");
+const notesBtn = document.getElementById("notesBtn");
+const notesEl = document.getElementById("notes");
+const todoForm = document.getElementById("todoForm");
+const todoIn = document.getElementById("todoIn");
+const todoList = document.getElementById("todoList");
+const noteForm = document.getElementById("noteForm");
+const noteIn = document.getElementById("noteIn");
+const noteList = document.getElementById("noteList");
+const closeNotes = document.getElementById("closeNotes");
 
 // Temporary context: page khula hai tab tak. History save ON ho to storage mein bhi.
 let history = [];
@@ -227,6 +238,138 @@ async function askAI(text) {
   }
 }
 
+/* ---------- Notes aur To-do (sirf is browser mein save) ---------- */
+let store = { todos: [], notes: [] };
+
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function loadStore() {
+  try {
+    const d = JSON.parse(localStorage.getItem(NOTES_KEY));
+    if (d && typeof d === "object") {
+      if (Array.isArray(d.todos)) {
+        store.todos = d.todos
+          .filter(x => x && typeof x.text === "string")
+          .slice(0, MAX_ITEMS)
+          .map(x => ({ id: String(x.id || newId()), text: x.text.slice(0, 200), done: x.done === true }));
+      }
+      if (Array.isArray(d.notes)) {
+        store.notes = d.notes
+          .filter(x => x && typeof x.text === "string")
+          .slice(0, MAX_ITEMS)
+          .map(x => ({ id: String(x.id || newId()), text: x.text.slice(0, 500) }));
+      }
+    }
+  } catch (e) { /* kuch save nahi tha */ }
+}
+
+function saveStore() {
+  try {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(store));
+    return true;
+  } catch (e) {
+    addMessage("Save nahi ho paya. Browser storage band ya full ho sakta hai.", "sys");
+    return false;
+  }
+}
+
+function makeRow(text, onDelete, onToggle, done) {
+  const li = document.createElement("li");
+  if (onToggle) {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = done;
+    cb.setAttribute("aria-label", "Task poora hua");
+    cb.addEventListener("change", onToggle);
+    li.appendChild(cb);
+  }
+  const span = document.createElement("span");
+  span.textContent = text;            // textContent: HTML inject nahi ho sakta
+  if (done) span.className = "done";
+  li.appendChild(span);
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "ghost x";
+  del.textContent = "✕";
+  del.setAttribute("aria-label", "Delete karo");
+  del.addEventListener("click", onDelete);
+  li.appendChild(del);
+  return li;
+}
+
+function renderNotes() {
+  if (!todoList || !noteList) return;
+  todoList.innerHTML = "";
+  noteList.innerHTML = "";
+
+  if (!store.todos.length) {
+    const li = document.createElement("li");
+    li.className = "empty"; li.textContent = "Koi task nahi.";
+    todoList.appendChild(li);
+  }
+  store.todos.forEach(item => {
+    todoList.appendChild(makeRow(item.text,
+      () => { store.todos = store.todos.filter(x => x.id !== item.id); saveStore(); renderNotes(); },
+      () => { item.done = !item.done; saveStore(); renderNotes(); },
+      item.done));
+  });
+
+  if (!store.notes.length) {
+    const li = document.createElement("li");
+    li.className = "empty"; li.textContent = "Koi note nahi.";
+    noteList.appendChild(li);
+  }
+  store.notes.forEach(item => {
+    noteList.appendChild(makeRow(item.text,
+      () => { store.notes = store.notes.filter(x => x.id !== item.id); saveStore(); renderNotes(); },
+      null, false));
+  });
+}
+
+function addTodo(text) {
+  const t = String(text || "").trim().slice(0, 200);
+  if (!t) return false;
+  if (store.todos.length >= MAX_ITEMS) {
+    addMessage("Task list full hai (" + MAX_ITEMS + "). Pehle kuch delete karo.", "sys");
+    return false;
+  }
+  store.todos.push({ id: newId(), text: t, done: false });
+  const ok = saveStore();
+  renderNotes();
+  return ok;
+}
+
+function addNote(text) {
+  const t = String(text || "").trim().slice(0, 500);
+  if (!t) return false;
+  if (store.notes.length >= MAX_ITEMS) {
+    addMessage("Notes full hain (" + MAX_ITEMS + "). Pehle kuch delete karo.", "sys");
+    return false;
+  }
+  store.notes.push({ id: newId(), text: t });
+  const ok = saveStore();
+  renderNotes();
+  return ok;
+}
+
+function openNotes() {
+  if (settingsEl) settingsEl.hidden = true;
+  if (notesEl) { renderNotes(); notesEl.hidden = false; }
+}
+
+if (notesBtn) notesBtn.addEventListener("click", openNotes);
+if (closeNotes) closeNotes.addEventListener("click", () => { notesEl.hidden = true; });
+if (todoForm) todoForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (addTodo(todoIn.value)) todoIn.value = "";
+});
+if (noteForm) noteForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (addNote(noteIn.value)) noteIn.value = "";
+});
+
 /* ---------- Voice commands (browser ke andar chalne wale) ---------- */
 const JOKES = [
   "Teacher ne poocha: homework kahan hai? Student bola: Sir, cloud mein tha, network chala gaya.",
@@ -309,6 +452,38 @@ function runCommand(raw) {
     return true;
   }
 
+  // Notes / To-do panel kholna
+  if (/^(?:show|open|dikhao)\s+(?:my\s+)?(?:notes|todos?|to-do|to do|tasks?|list)$/i.test(t) ||
+      /^(?:notes|todos?|to-do|to do|tasks?|नोट्स|टू डू|टूडू)\s+(?:dikhao|dikha do|kholo|दिखाओ|खोलो)$/i.test(t)) {
+    openNotes();
+    reply("Notes aur to-do panel khol diya.");
+    return true;
+  }
+
+  // Note save karna (original spelling/case ke saath)
+  const r = raw.trim().replace(/[.!?।]+$/, "");
+  const nm = r.match(/^(?:note karo|note kar do|note kar|add note|new note|नोट करो|नोट कर दो|नोट कर)(?:\s*[:\-]\s*|\s+)(.+)$/i) ||
+             r.match(/^note\s*[:\-]\s*(.+)$/i) ||
+             r.match(/^(.+?)\s+(?:note karo|note kar do|नोट करो|नोट कर लो)$/i);
+  if (nm) {
+    if (addNote(nm[1])) {
+      const shown = nm[1].trim().slice(0, 60);
+      reply("Note save ho gaya: " + shown);
+    }
+    return true;
+  }
+
+  // To-do add karna
+  const tm = r.match(/^(?:add todo|add to-do|add to do|add task|new task|new todo|todo|to-do|टू डू जोड़ो|टूडू जोड़ो|टास्क जोड़ो)(?:\s*[:\-]\s*|\s+)(.+)$/i) ||
+             r.match(/^(.+?)\s+(?:todo mein add karo|task add karo|to do mein daalo|टू डू में जोड़ो)$/i);
+  if (tm) {
+    if (addTodo(tm[1])) {
+      const shown = tm[1].trim().slice(0, 60);
+      reply("Task add ho gaya: " + shown);
+    }
+    return true;
+  }
+
   // Open Google / YouTube (Hindi/English, alag-alag spelling ke saath)
   const c = t.replace(/\s+/g, "");
   const wantsOpen = /(^|\s)(open|ओपन)(\s|$)|खोल|kholo|khol\b|चालू|chalu/.test(t);
@@ -380,6 +555,7 @@ function openSettings() {
   saveHistBox.checked = prefs.save;
   if (nameIn) nameIn.value = prefs.name;
   if (personaSel) personaSel.value = prefs.persona;
+  if (notesEl) notesEl.hidden = true;
   settingsEl.hidden = false;
 }
 gear.addEventListener("click", openSettings);
@@ -410,8 +586,10 @@ if (personaSel) personaSel.addEventListener("change", () => {
 });
 
 wipeBtn.addEventListener("click", () => {
-  if (!confirm("Saved history aur settings delete kar dun? Ye wapas nahi aayega.")) return;
-  try { localStorage.removeItem(PREFS_KEY); localStorage.removeItem(HIST_KEY); } catch (e) {}
+  if (!confirm("Saved history, settings, notes aur to-do delete kar dun? Ye wapas nahi aayega.")) return;
+  try { localStorage.removeItem(PREFS_KEY); localStorage.removeItem(HIST_KEY); localStorage.removeItem(NOTES_KEY); } catch (e) {}
+  store = { todos: [], notes: [] };
+  renderNotes();
   prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly" };
   applyName();
   history = [];
@@ -423,6 +601,8 @@ wipeBtn.addEventListener("click", () => {
 /* ---------- Start ---------- */
 loadPrefs();
 applyName();
+loadStore();
+renderNotes();
 if (prefs.save) {
   history = loadHistory();
 }
