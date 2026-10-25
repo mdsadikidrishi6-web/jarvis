@@ -398,6 +398,138 @@ function setPersona(p) {
   if (personaSel) personaSel.value = prefs.persona;
 }
 
+/* ---------- Weather (Open-Meteo: free, bina API key; sirf browser se call) ---------- */
+const WCODES = {
+  0: "saaf aasmaan", 1: "zyadatar saaf", 2: "thode badal", 3: "badal chhaye hue",
+  45: "kohra", 48: "jamne wala kohra",
+  51: "halki phuhaar", 53: "phuhaar", 55: "tez phuhaar", 56: "halki jamne wali phuhaar", 57: "tez jamne wali phuhaar",
+  61: "halki baarish", 63: "baarish", 65: "tez baarish", 66: "halki jamne wali baarish", 67: "tez jamne wali baarish",
+  71: "halki barfbari", 73: "barfbari", 75: "tez barfbari", 77: "barf ke kan",
+  80: "halki baarish ki bauchhar", 81: "baarish ki bauchhar", 82: "tez bauchhar",
+  85: "halki barf ki bauchhar", 86: "tez barf ki bauchhar",
+  95: "bijli ke saath toofan", 96: "ole ke saath toofan", 99: "tez ole ke saath toofan"
+};
+
+async function getJSON(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Coordinates se mausam ka chhota Hinglish text banata hai
+async function weatherText(lat, lon, place) {
+  const url = "https://api.open-meteo.com/v1/forecast?latitude=" + encodeURIComponent(lat) +
+    "&longitude=" + encodeURIComponent(lon) +
+    "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m" +
+    "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+    "&forecast_days=1&timezone=auto";
+  const d = await getJSON(url);
+  const c = d && d.current;
+  if (!c || typeof c.temperature_2m !== "number") throw new Error("Mausam ka data nahi mila.");
+
+  const desc = WCODES[c.weather_code] || "mausam ki jaankari";
+  let out = place + " mein abhi " + Math.round(c.temperature_2m) + " degree Celsius hai";
+  if (typeof c.apparent_temperature === "number") out += " (mehsoos " + Math.round(c.apparent_temperature) + ")";
+  out += ", " + desc + ".";
+  if (typeof c.relative_humidity_2m === "number") out += " Nami " + Math.round(c.relative_humidity_2m) + " percent.";
+  if (typeof c.wind_speed_10m === "number") out += " Hawa " + Math.round(c.wind_speed_10m) + " kilometre per ghanta.";
+
+  const dy = d.daily;
+  if (dy && dy.temperature_2m_max && dy.temperature_2m_min &&
+      typeof dy.temperature_2m_max[0] === "number" && typeof dy.temperature_2m_min[0] === "number") {
+    out += " Aaj kam se kam " + Math.round(dy.temperature_2m_min[0]) + " aur zyada se zyada " +
+           Math.round(dy.temperature_2m_max[0]) + " degree.";
+  }
+  if (dy && dy.precipitation_probability_max && typeof dy.precipitation_probability_max[0] === "number") {
+    out += " Baarish ki sambhavna " + Math.round(dy.precipitation_probability_max[0]) + " percent.";
+  }
+  return out;
+}
+
+// Shehar ke naam se
+async function weatherForCity(name) {
+  const lang = /[\u0900-\u097F]/.test(name) ? "hi" : "en";
+  const g = await getJSON("https://geocoding-api.open-meteo.com/v1/search?name=" +
+    encodeURIComponent(name) + "&count=1&language=" + lang + "&format=json");
+  const r = g && g.results && g.results[0];
+  if (!r) throw new Error("Is naam ka shehar nahi mila. Spelling check karo ya English mein likho.");
+  const place = r.name + (r.country ? ", " + r.country : "");
+  return weatherText(r.latitude, r.longitude, place);
+}
+
+// Device location se (browser permission poochta hai)
+function getPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error("Is browser mein location support nahi hai.")); return; }
+    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, maximumAge: 600000 });
+  });
+}
+async function weatherHere() {
+  const pos = await getPosition();
+  // Sirf lagbhag 1 km tak ki location bhejte hain (2 decimal), aur kahin save nahi karte
+  const lat = Math.round(pos.coords.latitude * 100) / 100;
+  const lon = Math.round(pos.coords.longitude * 100) / 100;
+  return weatherText(lat, lon, "Tumhari location");
+}
+
+function weatherError(err) {
+  if (err && err.name === "AbortError") return "Mausam ki service ne bahut der kar di. Dobara try karo.";
+  if (err instanceof TypeError) return "Mausam ki service tak pahunch nahi paye. Internet check karo.";
+  if (err && typeof err.code === "number" && err.message) {
+    if (err.code === 1) return "Location ki permission deny hai. Shehar ka naam likho, jaise: weather Delhi.";
+    if (err.code === 2) return "Location pata nahi chali. Shehar ka naam likho, jaise: weather Delhi.";
+    if (err.code === 3) return "Location mein bahut der lagi. Shehar ka naam likho, jaise: weather Delhi.";
+  }
+  return (err && err.message) ? err.message : "Mausam nahi mil paya.";
+}
+
+// Kaam chalata hai, jawab chat aur history mein jodta hai (taaki follow-up sawal ban sakein)
+async function runWeather(task, userText) {
+  busy = true;
+  sendBtn.disabled = true;
+  setState("thinking");
+  try {
+    const text = await task();
+    history.push({ role: "user", text: userText.slice(0, 1000) });
+    history.push({ role: "ai", text: text });
+    saveHistory();
+    setState("idle");
+    reply(text);
+  } catch (err) {
+    addMessage(weatherError(err), "sys");
+    setState("idle");
+  } finally {
+    busy = false;
+    sendBtn.disabled = false;
+  }
+}
+
+// Haan / Nahi poochne wala card (link kholne wale card se alag: yahan koi URL nahi)
+function askYesNo(question, onYes) {
+  const box = document.createElement("div");
+  box.className = "msg sys";
+  const p = document.createElement("div");
+  p.textContent = question;
+  p.style.marginBottom = "8px";
+  const yes = document.createElement("button");
+  yes.type = "button"; yes.className = "ghost"; yes.textContent = "Haan";
+  yes.style.marginRight = "8px";
+  const no = document.createElement("button");
+  no.type = "button"; no.className = "ghost"; no.textContent = "Nahi";
+  yes.addEventListener("click", () => { yes.disabled = true; no.disabled = true; onYes(); });
+  no.addEventListener("click", () => { yes.disabled = true; no.disabled = true; p.textContent = "Theek hai, cancel kar diya."; });
+  box.append(p, yes, no);
+  chat.appendChild(box);
+  chat.scrollTop = chat.scrollHeight;
+  speak(question);
+}
+
 /* ---------- Voice commands (browser ke andar chalne wale) ---------- */
 const JOKES = [
   "Teacher ne poocha: homework kahan hai? Student bola: Sir, cloud mein tha, network chala gaya.",
@@ -505,6 +637,40 @@ function runCommand(raw) {
   if (/^(?:neet\s+)?(?:revision plan|रिवीजन प्लान|रिविजन प्लान)(?:\s+.*)?$/.test(t)) {
     askAI("Mera NEET 2027 ka revision plan banao. Pehle mujhse 2 chhote sawal poochho: kitne din ya mahine bache hain, aur kaun se subjects weak hain. Phir plan do.");
     return true;
+  }
+
+  // Weather: "weather delhi", "mausam delhi", "delhi ka mausam", "weather" (device location)
+  {
+    const wr = raw.trim().replace(/[.!?।]+$/, "");
+    const NOT_CITY = /^(?:what|how|tell|show|kya|aaj|आज|today|abhi|अभी|kal|कल|the|is|current|ka|का)(?:\s|$)/i;
+    let wcity = null;
+    let wmatch = false;
+
+    let wm = wr.match(/^(?:weather|mausam|मौसम|वेदर|मोसम)(?:$|[\s:\-]+(?:(?:in|of|for|at|ka|mein|का|में)\s+)?(.*)$)/i);
+    if (wm) { wmatch = true; wcity = (wm[1] || "").trim(); }
+    if (!wmatch) {
+      wm = wr.match(/^(.+?)\s+(?:ka\s+mausam|ka\s+weather|का\s+मौसम|का\s+वेदर|mein\s+mausam|में\s+मौसम|weather|mausam|मौसम)$/i);
+      if (wm) { wmatch = true; wcity = wm[1].trim(); }
+    }
+    if (!wmatch) {
+      wm = wr.match(/^(?:what(?:'s| is) the weather(?: like)?|how(?:'s| is) the weather)(?:\s+(?:in|at|for)\s+(.+))?$/i);
+      if (wm) { wmatch = true; wcity = (wm[1] || "").trim(); }
+    }
+
+    // Lambi baat (3 se zyada shabd) shehar ka naam nahi hoti, AI ko jane do
+    if (wmatch && wcity && wcity.split(/\s+/).length > 3) wmatch = false;
+
+    if (wmatch) {
+      if (wcity && NOT_CITY.test(wcity)) wcity = "";
+      wcity = (wcity || "").slice(0, 60);
+      if (wcity) {
+        runWeather(() => weatherForCity(wcity), raw);
+      } else {
+        askYesNo("Mausam ke liye tumhari location use karun? Browser alag se permission poochega. Location kahin save nahi hoti.",
+          () => runWeather(weatherHere, raw));
+      }
+      return true;
+    }
   }
 
   // Notes / To-do panel kholna
