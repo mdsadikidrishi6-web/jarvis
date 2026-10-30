@@ -39,6 +39,9 @@ const voiceEnSel = document.getElementById("voiceEn");
 const testHiBtn = document.getElementById("testHi");
 const testEnBtn = document.getElementById("testEn");
 const voiceNote = document.getElementById("voiceNote");
+const elevenOn = document.getElementById("elevenOn");
+const webOn = document.getElementById("webOn");
+const elevenNote = document.getElementById("elevenNote");
 const studyBtn = document.getElementById("studyBtn");
 const studyEl = document.getElementById("study");
 const closeStudy = document.getElementById("closeStudy");
@@ -47,7 +50,8 @@ const closeStudy = document.getElementById("closeStudy");
 let history = [];
 let busy = false;
 const PERSONAS = ["friendly", "teacher", "short", "funny", "neet"];
-let prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly", voiceHi: "", voiceEn: "" };
+let prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly", voiceHi: "", voiceEn: "", eleven: false, elevenUsed: 0, elevenMonth: "", web: true };
+let elevenAudio = null;
 
 // Naam: sirf akshar, number aur space, max 20
 function cleanName(s) {
@@ -72,6 +76,10 @@ function loadPrefs() {
       prefs.persona = PERSONAS.includes(p.persona) ? p.persona : "friendly";
       prefs.voiceHi = typeof p.voiceHi === "string" ? p.voiceHi.slice(0, 200) : "";
       prefs.voiceEn = typeof p.voiceEn === "string" ? p.voiceEn.slice(0, 200) : "";
+      prefs.eleven = p.eleven === true;
+      prefs.web = p.web !== false;
+      prefs.elevenUsed = Number(p.elevenUsed) > 0 ? Math.floor(Number(p.elevenUsed)) : 0;
+      prefs.elevenMonth = typeof p.elevenMonth === "string" ? p.elevenMonth.slice(0, 7) : "";
     }
   } catch (e) { /* kuch save nahi tha */ }
 }
@@ -109,6 +117,15 @@ function addMessage(text, who) {
   const div = document.createElement("div");
   div.className = "msg " + who;
   div.textContent = text;
+  if (who === "ai" && prefs.eleven) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ghost speakbtn";
+    b.textContent = "🔊";
+    b.setAttribute("aria-label", "ElevenLabs awaaz mein suno");
+    b.addEventListener("click", () => speakEleven(text, b));
+    div.appendChild(b);
+  }
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -147,6 +164,7 @@ function speak(text) {
 }
 
 function stopSpeaking() {
+  if (elevenAudio) { try { elevenAudio.pause(); } catch (e) {} elevenAudio = null; }
   if (synth) synth.cancel();
   if (!busy) setState("idle");
 }
@@ -223,7 +241,7 @@ async function askAI(text) {
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value, name: prefs.name, persona: prefs.persona }),
+      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value, name: prefs.name, persona: prefs.persona, search: prefs.web }),
       signal: ctrl.signal
     });
 
@@ -237,6 +255,7 @@ async function askAI(text) {
     history.push({ role: "ai", text: data.reply });
     saveHistory();
     addMessage(data.reply, "ai");
+    addSources(data);
     setState("idle");
     speak(data.reply);
   } catch (err) {
@@ -255,6 +274,102 @@ async function askAI(text) {
     sendBtn.disabled = false;
   }
 }
+
+/* ---------- Internet search (Gemini + Google Search, Worker ke through) ---------- */
+// Jab AI ne web search kiya ho to sources aur Google ke "Search suggestions" dikhata hai
+function addSources(data) {
+  if (!data || !data.searched) return;
+  const box = document.createElement("div");
+  box.className = "msg ai src";
+
+  if (Array.isArray(data.sources) && data.sources.length) {
+    const lab = document.createElement("div");
+    lab.textContent = "Web se (Google Search):";
+    box.appendChild(lab);
+    data.sources.slice(0, 3).forEach(src => {
+      if (!src || typeof src.uri !== "string" || !/^https:\/\//.test(src.uri)) return;
+      const a = document.createElement("a");
+      a.href = src.uri;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = String(src.title || src.uri).slice(0, 60);
+      box.appendChild(a);
+    });
+  }
+  // Google ka diya hua HTML sandboxed iframe mein (scripts band, sirf links khul sakte hain)
+  if (typeof data.searchHtml === "string" && data.searchHtml && data.searchHtml.length <= 20000) {
+    const f = document.createElement("iframe");
+    f.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
+    f.title = "Google Search suggestions";
+    f.className = "sugg";
+    f.srcdoc = data.searchHtml;
+    box.appendChild(f);
+  }
+  chat.appendChild(box);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+if (webOn) webOn.addEventListener("change", () => {
+  prefs.web = webOn.checked;
+  savePrefs();
+});
+
+/* ---------- ElevenLabs (optional, sirf 🔊 button dabane par; Worker ke /tts se) ---------- */
+function addElevenUsage(n) {
+  const month = new Date().toISOString().slice(0, 7);
+  if (prefs.elevenMonth !== month) { prefs.elevenMonth = month; prefs.elevenUsed = 0; }
+  prefs.elevenUsed += n;
+  savePrefs();
+  updateElevenNote();
+}
+
+function updateElevenNote() {
+  if (!elevenNote) return;
+  elevenNote.textContent = "Is phone se is mahine lagbhag " + (prefs.elevenUsed || 0) +
+    " akshar ElevenLabs ko bheje gaye. Free credits kam hote hain, asli bacha hua hissa ElevenLabs dashboard mein dekho. " +
+    "Jis jawab par 🔊 dabate ho, uska text ElevenLabs ko jaata hai.";
+}
+
+async function speakEleven(text, btn) {
+  if (!prefs.eleven) return;
+  stopSpeaking();
+  const t = String(text || "").trim().slice(0, 600);
+  if (!t) return;
+  if (btn) btn.disabled = true;
+  setState("thinking");
+  try {
+    const res = await fetch(API_URL.replace(/\/$/, "") + "/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: t })
+    });
+    if (!res.ok) {
+      let m = "ElevenLabs se awaaz nahi mili (" + res.status + ").";
+      try { const d = await res.json(); if (d && d.error) m = d.error; } catch (e) {}
+      throw new Error(m);
+    }
+    const blob = await res.blob();
+    addElevenUsage(t.length);
+    const url = URL.createObjectURL(blob);
+    const a = new Audio(url);
+    elevenAudio = a;
+    a.onplay = () => setState("speaking");
+    a.onended = () => { setState("idle"); URL.revokeObjectURL(url); };
+    a.onerror = () => { setState("idle"); URL.revokeObjectURL(url); addMessage("Awaaz chalane mein dikkat aayi.", "sys"); };
+    await a.play();
+  } catch (err) {
+    setState("idle");
+    addMessage(err instanceof TypeError ? "ElevenLabs tak pahunch nahi paye. Internet check karo." : err.message, "sys");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+if (elevenOn) elevenOn.addEventListener("change", () => {
+  prefs.eleven = elevenOn.checked;
+  savePrefs();
+  if (prefs.eleven) addMessage("ElevenLabs ON. Ab naye AI jawabon par 🔊 button aayega.", "sys");
+});
 
 /* ---------- Awaaz chunna (phone ki apni awaazein, free aur unlimited) ---------- */
 function fillVoiceSelect(sel, base, saved) {
@@ -844,6 +959,9 @@ function openSettings() {
   if (nameIn) nameIn.value = prefs.name;
   if (personaSel) personaSel.value = prefs.persona;
   refreshVoiceLists();
+  if (elevenOn) elevenOn.checked = prefs.eleven;
+  if (webOn) webOn.checked = prefs.web;
+  updateElevenNote();
   if (notesEl) notesEl.hidden = true;
   if (studyEl) studyEl.hidden = true;
   settingsEl.hidden = false;
@@ -880,8 +998,9 @@ wipeBtn.addEventListener("click", () => {
   try { localStorage.removeItem(PREFS_KEY); localStorage.removeItem(HIST_KEY); localStorage.removeItem(NOTES_KEY); } catch (e) {}
   store = { todos: [], notes: [] };
   renderNotes();
-  prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly", voiceHi: "", voiceEn: "" };
+  prefs = { rate: 1, save: false, name: "JARVIS", persona: "friendly", voiceHi: "", voiceEn: "", eleven: false, elevenUsed: 0, elevenMonth: "", web: true };
   applyName();
+  updateElevenNote();
   history = [];
   chat.innerHTML = "";
   openSettings();

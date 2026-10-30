@@ -24,3 +24,11 @@ button.x { padding: 4px 10px; font-size: .9rem; flex: none; }
 /* Lambe panel phone par scroll ho sakein */
 .settings { max-height: 80dvh; overflow-y: auto; }
 button.small { padding: 8px 12px; font-size: .85rem; margin: 0 0 12px; }
+
+/* ElevenLabs 🔊 button AI message ke andar */
+.msg .speakbtn { display: block; margin-top: 6px; padding: 2px 12px; font-size: .9rem; }
+
+/* Internet search: sources aur Google Search suggestions */
+.msg.src { font-size: .85rem; }
+.msg.src a { display: block; color: #7fefff; margin-top: 4px; overflow-wrap: anywhere; }
+.msg.src iframe.sugg { width: 100%; height: 56px; border: 0; margin-top: 6px; background: transparent; color-scheme: light; border-radius: 8px; }
