@@ -789,8 +789,12 @@ function runCommand(raw) {
     return true;
   }
 
-  // Aaj ki taarikh: phone ki ghadi se
-  if (/(what(?:'s| is)?(?: the)? (?:today'?s )?date|today'?s date|aaj (?:ki|ka) (?:taarikh|tarikh|date)|aaj kya (?:taarikh|tarikh|date)|आज (?:की|का) (?:तारीख|तारीख़|डेट)|आज क्या (?:तारीख|डेट))/i.test(t)) {
+  // Aaj ki taarikh: phone ki ghadi se (alag-alag likhne ke tareeke pakadta hai)
+  const dateWords = t.split(/\s+/).length;
+  const hasTarikh = /t[a]{1,2}r[ie]{1,2}kh|तारीख़?|तारिख/i.test(t);
+  const hasDate = /\bdate\b/i.test(t) && /\b(aaj|today|kya|what|kitna|kitni)\b|आज/i.test(t);
+  const notToday = /janam|birth|dob|exam|test|result|deadline|जन्म|परीक्षा|परिणाम/i.test(t);
+  if (dateWords <= 8 && (hasTarikh || hasDate) && !notToday) {
     reply("Aaj ki taarikh hai: " + new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
     return true;
   }
