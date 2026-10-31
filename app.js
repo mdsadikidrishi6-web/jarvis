@@ -241,7 +241,7 @@ async function askAI(text) {
     const res = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value, name: prefs.name, persona: prefs.persona, search: prefs.web }),
+      body: JSON.stringify({ messages: history.slice(-20), lang: langSel.value, name: prefs.name, persona: prefs.persona, search: prefs.web, today: new Date().toLocaleString("en-IN", { dateStyle: "full", timeStyle: "short" }) }),
       signal: ctrl.signal
     });
 
@@ -255,6 +255,7 @@ async function askAI(text) {
     history.push({ role: "ai", text: data.reply });
     saveHistory();
     addMessage(data.reply, "ai");
+    if (prefs.web && data.searchNote) addMessage(data.searchNote, "sys");
     addSources(data);
     setState("idle");
     speak(data.reply);
@@ -785,6 +786,12 @@ function runCommand(raw) {
   if (t.includes("what time") || t.includes("what's the time") || t.includes("what is the time") ||
       t.includes("samay kya") || t.includes("time kya") || t.includes("समय क्या")) {
     reply("Abhi samay hai: " + new Date().toLocaleTimeString());
+    return true;
+  }
+
+  // Aaj ki taarikh: phone ki ghadi se
+  if (/(what(?:'s| is)?(?: the)? (?:today'?s )?date|today'?s date|aaj (?:ki|ka) (?:taarikh|tarikh|date)|aaj kya (?:taarikh|tarikh|date)|आज (?:की|का) (?:तारीख|तारीख़|डेट)|आज क्या (?:तारीख|डेट))/i.test(t)) {
+    reply("Aaj ki taarikh hai: " + new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
     return true;
   }
 
