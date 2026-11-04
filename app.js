@@ -128,6 +128,20 @@ function addMessage(text, who) {
   }
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+// AI ke jawab ke neeche "Google par dekho" link: user ka sawal Google par khulta hai (user ke tap par)
+function addGoogleLink(div, query) {
+  const q = String(query || "").trim().slice(0, 200);
+  if (!div || !q) return;
+  const a = document.createElement("a");
+  a.href = "https://www.google.com/search?q=" + encodeURIComponent(q);
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.className = "gsearch";
+  a.textContent = "🔎 Google par dekho";
+  div.appendChild(a);
 }
 
 /* ---------- Text-to-speech ---------- */
@@ -254,7 +268,8 @@ async function askAI(text) {
 
     history.push({ role: "ai", text: data.reply });
     saveHistory();
-    addMessage(data.reply, "ai");
+    const replyDiv = addMessage(data.reply, "ai");
+    addGoogleLink(replyDiv, text);
     if (prefs.web && data.searchNote) addMessage(data.searchNote, "sys");
     addSources(data);
     setState("idle");
@@ -279,9 +294,26 @@ async function askAI(text) {
 /* ---------- Internet search (Gemini + Google Search, Worker ke through) ---------- */
 // Jab AI ne web search kiya ho to sources aur Google ke "Search suggestions" dikhata hai
 function addSources(data) {
-  if (!data || !data.searched) return;
+  const hasNews = data && Array.isArray(data.news) && data.news.length > 0;
+  if (!data || (!data.searched && !hasNews)) return;
   const box = document.createElement("div");
   box.className = "msg ai src";
+
+  // Google News ke headlines (links sirf https)
+  if (hasNews) {
+    const lab = document.createElement("div");
+    lab.textContent = "Khabrein (Google News):";
+    box.appendChild(lab);
+    data.news.slice(0, 5).forEach(n => {
+      if (!n || typeof n.uri !== "string" || !/^https:\/\//.test(n.uri)) return;
+      const a = document.createElement("a");
+      a.href = n.uri;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = String(n.title || n.uri).slice(0, 90);
+      box.appendChild(a);
+    });
+  }
 
   if (Array.isArray(data.sources) && data.sources.length) {
     const lab = document.createElement("div");
