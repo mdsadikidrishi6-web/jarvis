@@ -295,9 +295,23 @@ async function askAI(text) {
 // Jab AI ne web search kiya ho to sources aur Google ke "Search suggestions" dikhata hai
 function addSources(data) {
   const hasNews = data && Array.isArray(data.news) && data.news.length > 0;
-  if (!data || (!data.searched && !hasNews)) return;
+  const hasWiki = data && data.wiki && typeof data.wiki.uri === "string" && /^https:\/\/[a-z-]+\.wikipedia\.org\//.test(data.wiki.uri);
+  if (!data || (!data.searched && !hasNews && !hasWiki)) return;
   const box = document.createElement("div");
   box.className = "msg ai src";
+
+  // Wikipedia ka link (jab jawab mein Wikipedia ki jaankari use hui ho)
+  if (hasWiki) {
+    const lab = document.createElement("div");
+    lab.textContent = "Wikipedia:";
+    box.appendChild(lab);
+    const a = document.createElement("a");
+    a.href = data.wiki.uri;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = String(data.wiki.title || data.wiki.uri).slice(0, 90);
+    box.appendChild(a);
+  }
 
   // Google News ke headlines (links sirf https)
   if (hasNews) {
