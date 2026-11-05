@@ -759,6 +759,41 @@ function askYesNo(question, onYes) {
   speak(question);
 }
 
+/* ---------- Laptop control (Python agent ke through; sirf lock/sleep/shutdown/restart/cancel) ---------- */
+let controlPin = "";   // sirf is session ke liye memory mein, kahin save nahi hota
+const CONTROL_TEXT = {
+  lock: "lock karne",
+  sleep: "sleep mode mein bhejne",
+  shutdown: "band (shutdown) karne",
+  restart: "restart karne",
+  cancel: "pending shutdown ya restart cancel karne"
+};
+
+function controlLaptop(action) {
+  const q = "Laptop ko " + CONTROL_TEXT[action] + " ka command bhejun? Laptop par JARVIS agent chalna chahiye.";
+  askYesNo(q, async () => {
+    if (!controlPin) {
+      const p = window.prompt("Laptop control PIN daalo:");
+      if (!p) { addMessage("PIN nahi diya, cancel kar diya.", "sys"); return; }
+      controlPin = p;
+    }
+    try {
+      const res = await fetch(API_URL.replace(/\/$/, "") + "/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, pin: controlPin })
+      });
+      let d = {};
+      try { d = await res.json(); } catch (e) { /* JSON nahi mila */ }
+      if (res.status === 403) { controlPin = ""; addMessage("PIN galat hai. Dobara try karo.", "sys"); return; }
+      if (!res.ok) throw new Error(d.error || ("Server error (" + res.status + ")"));
+      reply("Command bhej diya. Laptop ne kiya ya nahi, ye main dekh nahi sakta.");
+    } catch (err) {
+      addMessage(err instanceof TypeError ? "Server tak pahunch nahi paye. Internet check karo." : err.message, "sys");
+    }
+  });
+}
+
 /* ---------- Voice commands (browser ke andar chalne wale) ---------- */
 const JOKES = [
   "Teacher ne poocha: homework kahan hai? Student bola: Sir, cloud mein tha, network chala gaya.",
@@ -875,6 +910,29 @@ function runCommand(raw) {
   }
   if (/^(?:neet\s+)?(?:revision plan|रिवीजन प्लान|रिविजन प्लान)(?:\s+.*)?$/.test(t)) {
     askAI("Mera NEET 2027 ka revision plan banao. Pehle mujhse 2 chhote sawal poochho: kitne din ya mahine bache hain, aur kaun se subjects weak hain. Phir plan do.");
+    return true;
+  }
+
+  // Laptop control: "laptop lock karo", "shutdown the laptop", "लैपटॉप बंद करो", "laptop cancel"
+  if (/\b(laptop|computer|pc)\b|लैपटॉप|कंप्यूटर/i.test(t)) {
+    let act = null;
+    if (/cancel|रद्द|रोको/i.test(t)) act = "cancel";
+    else if (/restart|reboot|रीस्टार्ट|रिस्टार्ट/i.test(t)) act = "restart";
+    else if (/shut ?down|power off|\bband\b|बंद|शटडाउन|शट डाउन/i.test(t)) act = "shutdown";
+    else if (/\bsleep\b|सुला|स्लीप/i.test(t)) act = "sleep";
+    else if (/\block\b|लॉक/i.test(t)) act = "lock";
+    if (act) { controlLaptop(act); return true; }
+  }
+
+  // Phone lock/band: web app ye nahi kar sakti, saaf bata do (AI jhooth na bole)
+  if (/\b(phone|mobile)\b|फोन|मोबाइल/i.test(t) && /\block\b|लॉक|shut ?down|switch off|power off|\bband\b|बंद|स्विच ऑफ/i.test(t)) {
+    reply("Phone ko lock ya band karna web app se nahi ho sakta, Android ye website ko nahi deta. Power button dabao, ya MacroDroid jaisi Android automation app use karo.");
+    return true;
+  }
+
+  // WhatsApp mein naam khojna: website ye nahi kar sakti
+  if (/whatsapp|व्हाट्सएप|वॉट्सऐप|व्हाट्सऐप|वाट्सएप/i.test(t) && /khoj|search|find|dhund|ढूंढ|खोज|ढूँढ/i.test(t)) {
+    reply("Website WhatsApp ke andar contacts search nahi kar sakti. Main tumhare chune hue contacts save karke unka WhatsApp chat khol sakta hoon, bhejna tumhe khud hoga.");
     return true;
   }
 
